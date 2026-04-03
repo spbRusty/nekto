@@ -1,8 +1,9 @@
 # .github/workflows/scrape.yml
 name: Nekto scrape
+
 on:
   schedule:
-    - cron: '*/7 * * * *'
+    - cron: '*/7 * * * *'  # каждые 7 минут
   workflow_dispatch:
 
 permissions:
@@ -24,17 +25,10 @@ jobs:
           playwright install chromium
 
       - name: Run scraper
-        run: python scraper.py
-
-      - name: Commit and push
         run: |
+          python scraper.py
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add data.json
-          git diff --cached --quiet && exit 0
-          git commit -m "update data"
-          git pull --rebase origin main
-          git push origin main
-          done
-          git pull --rebase origin main
-          git push origin main
+          git diff --cached --quiet || git commit -m "update data"
+          git push

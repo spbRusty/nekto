@@ -2,16 +2,15 @@ name: Nekto scrape
 
 on:
   schedule:
-    - cron: '*/10 * * * *'   # каждые 10 минут
-  workflow_dispatch:
+    - cron: '*/10 * * * *' # Запуск каждые ~10 минут
+  workflow_dispatch: # Позволяет запускать кнопку вручную
 
 permissions:
-  contents: write
+  contents: write # Разрешение на пуш в репозиторий
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -20,14 +19,6 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: Cache Python deps & Playwright
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cache/pip
-            ~/.cache/ms-playwright
-          key: ${{ runner.os }}-pip-${{ hashFiles('scraper.py') }}
 
       - name: Install dependencies
         run: |
@@ -38,12 +29,14 @@ jobs:
       - name: Run scraper
         run: python scraper.py
 
-      - name: Push data
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Commit and Push data
         run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
+          # Настраиваем бота для коммита
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
           git add data.json
-          git diff --cached --quiet || git commit -m "update data"
+          
+          # Если изменений нет (например сайт упал и онлайн тот же), коммит не создаст ошибку
+          git diff --cached --quiet || git commit -m "Update online stats"
           git push

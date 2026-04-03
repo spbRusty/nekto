@@ -2,7 +2,7 @@ name: Nekto scrape
 
 on:
   schedule:
-    - cron: '*/10 * * * *'  # каждые 10 минут
+    - cron: '*/10 * * * *'   # каждые 10 минут
   workflow_dispatch:
 
 permissions:
@@ -21,15 +21,22 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Cache Python deps & Playwright
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/ms-playwright
+          key: ${{ runner.os }}-pip-${{ hashFiles('scraper.py') }}
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install playwright
-          playwright install chromium
+          playwright install chromium --with-deps
 
       - name: Run scraper
-        run: |
-          python scraper.py
+        run: python scraper.py
 
       - name: Push data
         env:

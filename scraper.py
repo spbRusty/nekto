@@ -8,10 +8,10 @@ with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
     page = browser.new_page()
     
-    # wait_until="networkidle" ждет, пока страница полностью не прогрузится
-    page.goto("https://nekto.me/audiochat", wait_until="networkidle", timeout=60000)
+    # Изменили networkidle на domcontentloaded
+    page.goto("https://nekto.me/audiochat", wait_until="domcontentloaded", timeout=60000)
     
-    # Небольшая пауза, чтобы JS на сайте точно успел отрендерить цифры
+    # Ждем 5 секунд, чтобы JS скрипты сайта успели отрисовать цифры онлайна
     page.wait_for_timeout(5000) 
     
     text = page.inner_text("body")
@@ -24,23 +24,20 @@ with sync_playwright() as p:
         
     browser.close()
 
-data = []
+data =[]
 
-# Читаем старые данные
 if os.path.exists("data.json"):
     with open("data.json", "r", encoding="utf-8") as f:
         try:
             data = json.load(f)
         except json.JSONDecodeError:
-            data = []
+            data =[]
 
-# Добавляем новые (используем правильный timezone)
 if users > 0:
     data.append({
         "time": datetime.now(timezone.utc).isoformat(),
         "users": users
     })
 
-# Сохраняем последние 5000 записей
 with open("data.json", "w", encoding="utf-8") as f:
     json.dump(data[-5000:], f)

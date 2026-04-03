@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Nekto Online</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {font-family: Arial; margin:20px; text-align:center;}
+    canvas {max-width:100%; margin:20px 0;}
+    .donate {margin-top:30px; font-size:18px;}
+  </style>
+</head>
+<body>
+  <h1>Онлайн на nekto.me</h1>
+  <canvas id="chart" height="300"></canvas>
+
+  <div class="donate">
+    <a href="https://new.donatepay.ru/@1465647" target="_blank">💰 Поддержать автора ☕</a>
+  </div>
+
+  <script>
+    let chart;
+    async function load() {
+      const res = await fetch('data.json');
+      const data = await res.json();
+      
+      const labels = data.map(d => new Date(d.time).toLocaleString('ru-RU'));
+      const users = data.map(d => d.users);
+
+      if (chart) chart.destroy();
+      chart = new Chart(document.getElementById('chart'), {
+        type: 'line',
+        data: { 
+          labels, 
+          datasets: [{ 
+            label: 'Пользователи онлайн', 
+            data: users, 
+            borderColor: '#4CAF50', 
+            tension: 0.2 
+          }] 
+        },
+        options: { 
+          responsive: true, 
+          scales: { y: { beginAtZero: true } } 
+        }
+      });
+    }
+    load();
+    setInterval(load, 300000);
+  </script>
+</body>
+</html>

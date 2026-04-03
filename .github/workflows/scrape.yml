@@ -1,9 +1,8 @@
 # .github/workflows/scrape.yml
 name: Nekto scrape
-
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '0 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -12,13 +11,10 @@ permissions:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
@@ -27,21 +23,20 @@ jobs:
           pip install playwright
           playwright install chromium
 
-      - name: Run scraper
-        run: |
-          python scraper.py 2>&1 | tee log.txt
-
-      - name: Show logs
-        if: always()
-        run: cat log.txt
-
-      - name: Commit data
+      - name: Run scraper loop (6x every 10 min)
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
-          git add data.json || true
-          git commit -m "update data" || exit 0
-          git push
+          for i in $(seq 1 6); do
+            echo "=== Run $i ==="
+            python scraper.py
+            git add data.json
+            git diff --cached --quiet || git commit -m "update data $i"
+            [ $i -lt 6 ] && sleep 600
+          done
+
+      - name: Push
+        run: git push
 
           git add data.json
           git commit -m "update data" || exit 0

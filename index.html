@@ -2,51 +2,73 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <title>Nekto Online</title>
+  <title>Nekto Online Heatmap</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@1.0.0"></script>
   <style>
-    body {font-family: Arial; margin:20px; text-align:center;}
-    canvas {max-width:100%; margin:20px 0;}
-    .donate {margin-top:30px; font-size:18px;}
+    body { font-family: Arial; margin:20px; text-align:center; }
+    canvas { max-width:100%; margin:20px 0; }
+    .donate { margin-top:30px; font-size:18px; }
   </style>
 </head>
 <body>
-  <h1>Онлайн на nekto.me</h1>
-  <canvas id="chart" height="300"></canvas>
-
+  <h1>Онлайн на nekto.me (тепловая карта)</h1>
+  <canvas id="heatmap" height="400"></canvas>
   <div class="donate">
     <a href="https://new.donatepay.ru/@1465647" target="_blank">💰 Поддержать автора ☕</a>
   </div>
 
   <script>
-    let chart;
-    async function load() {
+    async function loadHeatmap() {
       const res = await fetch('data.json');
       const data = await res.json();
-      
-      const labels = data.map(d => new Date(d.time).toLocaleString('ru-RU'));
-      const users = data.map(d => d.users);
 
-      if (chart) chart.destroy();
-      chart = new Chart(document.getElementById('chart'), {
-        type: 'line',
-        data: { 
-          labels, 
-          datasets: [{ 
-            label: 'Пользователи онлайн', 
-            data: users, 
-            borderColor: '#4CAF50', 
-            tension: 0.2 
-          }] 
-        },
-        options: { 
-          responsive: true, 
-          scales: { y: { beginAtZero: true } } 
+      // Подготовка данных: часы по X, дни по Y
+      const heatData = data.map(d => {
+        const date = new Date(d.time);
+        return {
+          x: date.getHours(),
+          y: date.getDate(),
+          v: d.users
+        };
+      });
+
+      const ctx = document.getElementById('heatmap').getContext('2d');
+      new Chart(ctx, {
+        type: 'matrix',
+        data: { datasets: [{
+          label: 'Пользователи онлайн',
+          data: heatData,
+          backgroundColor: ctx => {
+            const value = ctx.dataset.data[ctx.dataIndex].v;
+            const max = Math.max(...heatData.map(d => d.v));
+            const intensity = value / max;
+            return `rgba(76, 175, 80, ${intensity})`;
+          },
+          width: ctx => ctx.chart.chartArea.width / 24 - 1,
+          height: ctx => 20
+        }]},
+        options: {
+          responsive: true,
+          plugins: {
+            tooltip: {
+              callbacks: {
+                title: ctx => `Час: ${ctx[0].raw.x}, День: ${ctx[0].raw.y}`,
+                label: ctx => `Пользователи: ${ctx.raw.v}`
+              }
+            },
+            legend: { display: false }
+          },
+          scales: {
+            x: { title: { display: true, text: 'Часы' }, min:0, max:23 },
+            y: { title: { display: true, text: 'День месяца' } }
+          }
         }
       });
     }
-    load();
-    setInterval(load, 300000);
+
+    loadHeatmap();
+    setInterval(loadHeatmap, 300000);
   </script>
 </body>
 </html>

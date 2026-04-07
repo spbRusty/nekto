@@ -2,73 +2,310 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nekto Online Heatmap</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <!-- Chart.js 3.9.1 + matrix 1.0.0 — совместимые версии -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@1.0.0"></script>
+  
   <style>
-    body { font-family: Arial; margin:20px; text-align:center; }
-    canvas { max-width:100%; margin:20px 0; }
-    .donate { margin-top:30px; font-size:18px; }
+    * { box-sizing: border-box; }
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; 
+      margin: 0; 
+      padding: 20px; 
+      text-align: center; 
+      background: #f5f5f5;
+      color: #333;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+    }
+    h1 { 
+      margin: 0 0 10px; 
+      font-size: 1.5rem;
+      color: #2e7d32;
+    }
+    .subtitle {
+      color: #666;
+      font-size: 0.9rem;
+      margin-bottom: 20px;
+    }
+    .chart-wrapper {
+      position: relative;
+      width: 100%;
+      height: 500px;
+      margin: 20px 0;
+    }
+    canvas { 
+      max-width: 100%; 
+    }
+    .donate { 
+      margin-top: 30px; 
+      font-size: 16px; 
+    }
+    .donate a {
+      color: #fff;
+      background: #4caf50;
+      padding: 10px 20px;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 500;
+      transition: background 0.2s;
+      display: inline-block;
+    }
+    .donate a:hover {
+      background: #43a047;
+    }
+    .status {
+      font-size: 0.85rem;
+      color: #888;
+      margin-top: 10px;
+    }
+    .error {
+      color: #d32f2f;
+      background: #ffebee;
+      padding: 10px;
+      border-radius: 6px;
+      margin: 10px 0;
+      display: none;
+    }
+    @media (max-width: 600px) {
+      .chart-wrapper { height: 400px; }
+      h1 { font-size: 1.2rem; }
+    }
   </style>
 </head>
 <body>
-  <h1>Онлайн на nekto.me (тепловая карта)</h1>
-  <canvas id="heatmap" height="400"></canvas>
-  <div class="donate">
-    <a href="https://new.donatepay.ru/@1465647" target="_blank">💰 Поддержать автора ☕</a>
+  <div class="container">
+    <h1>📊 Онлайн на nekto.me</h1>
+    <div class="subtitle">Тепловая карта активности по часам и дням (UTC)</div>
+    
+    <div id="errorMsg" class="error"></div>
+    
+    <div class="chart-wrapper">
+      <canvas id="heatmap"></canvas>
+    </div>
+    
+    <div class="status" id="lastUpdate">Загрузка данных...</div>
+    
+    <div class="donate">
+      <a href="https://new.donatepay.ru/@1465647" target="_blank" rel="noopener">💰 Поддержать автора ☕</a>
+    </div>
   </div>
 
   <script>
-    async function loadHeatmap() {
-      const res = await fetch('data.json');
-      const data = await res.json();
-
-      // Подготовка данных: часы по X, дни по Y
-      const heatData = data.map(d => {
-        const date = new Date(d.time);
-        return {
-          x: date.getHours(),
-          y: date.getDate(),
-          v: d.users
-        };
-      });
-
-      const ctx = document.getElementById('heatmap').getContext('2d');
-      new Chart(ctx, {
-        type: 'matrix',
-        data: { datasets: [{
-          label: 'Пользователи онлайн',
-          data: heatData,
-          backgroundColor: ctx => {
-            const value = ctx.dataset.data[ctx.dataIndex].v;
-            const max = Math.max(...heatData.map(d => d.v));
-            const intensity = value / max;
-            return `rgba(76, 175, 80, ${intensity})`;
-          },
-          width: ctx => ctx.chart.chartArea.width / 24 - 1,
-          height: ctx => 20
-        }]},
-        options: {
-          responsive: true,
-          plugins: {
-            tooltip: {
-              callbacks: {
-                title: ctx => `Час: ${ctx[0].raw.x}, День: ${ctx[0].raw.y}`,
-                label: ctx => `Пользователи: ${ctx.raw.v}`
-              }
-            },
-            legend: { display: false }
-          },
-          scales: {
-            x: { title: { display: true, text: 'Часы' }, min:0, max:23 },
-            y: { title: { display: true, text: 'День месяца' } }
-          }
+    // ===== Утилиты =====
+    
+    // Надёжный парсинг даты с поддержкой разных форматов
+    function parseTime(timeStr) {
+      if (!timeStr) return null;
+      // Если нет таймзоны — добавляем UTC
+      if (!timeStr.includes('+') && !timeStr.endsWith('Z') && !timeStr.includes('-00:00')) {
+        // Проверяем, не заканчивается ли на микросекунды без таймзоны
+        if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+$/.test(timeStr)) {
+          timeStr += '+00:00';
         }
-      });
+      }
+      const date = new Date(timeStr);
+      return isNaN(date.getTime()) ? null : date;
     }
 
-    loadHeatmap();
-    setInterval(loadHeatmap, 300000);
+    // Агрегация данных: группировка по {day, hour} с усреднением
+    function aggregateData(rawData) {
+      const map = new Map();
+      
+      for (const entry of rawData) {
+        const date = parseTime(entry.time);
+        if (!date) continue;
+        
+        const day = date.getUTCDate();
+        const hour = date.getUTCHours();
+        const key = `${day}-${hour}`;
+        
+        if (!map.has(key)) {
+          map.set(key, { day, hour, values: [], count: 0 });
+        }
+        const item = map.get(key);
+        item.values.push(entry.users);
+        item.count++;
+      }
+      
+      return Array.from(map.values()).map(item => ({
+        x: item.hour,
+        y: item.day,
+        v: Math.round(item.values.reduce((a, b) => a + b, 0) / item.count)
+      }));
+    }
+
+    // ===== Основной код =====
+    
+    let heatmapChart = null;
+    
+    function showError(msg) {
+      const el = document.getElementById('errorMsg');
+      el.textContent = '⚠️ ' + msg;
+      el.style.display = 'block';
+    }
+    
+    function hideError() {
+      document.getElementById('errorMsg').style.display = 'none';
+    }
+    
+    function formatLastUpdate(timestamp) {
+      const d = new Date(timestamp);
+      return d.toLocaleString('ru-RU', { 
+        day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' 
+      }) + ' UTC';
+    }
+
+    async function loadHeatmap() {
+      try {
+        hideError();
+        
+        // Cache-busting + обработка относительного пути на GitHub Pages
+        const baseUrl = window.location.pathname.endsWith('/') 
+          ? window.location.pathname 
+          : window.location.pathname.replace(/\/[^/]+$/, '/');
+        const dataUrl = baseUrl + 'data.json?t=' + Date.now();
+        
+        const res = await fetch(dataUrl);
+        if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        
+        const rawData = await res.json();
+        if (!Array.isArray(rawData) || rawData.length === 0) {
+          throw new Error('Пустой или некорректный файл данных');
+        }
+        
+        const heatData = aggregateData(rawData);
+        if (heatData.length === 0) {
+          throw new Error('Не удалось распарсить даты из данных');
+        }
+
+        const values = heatData.map(d => d.v);
+        const maxVal = Math.max(...values);
+        const minVal = Math.min(...values);
+        const currentUsers = values[values.length - 1];
+
+        const ctx = document.getElementById('heatmap').getContext('2d');
+        
+        // Уничтожаем старый график
+        if (heatmapChart) {
+          heatmapChart.destroy();
+        }
+
+        heatmapChart = new Chart(ctx, {
+          type: 'matrix',
+           {
+            datasets: [{
+              label: 'Пользователи онлайн',
+               heatData,
+              backgroundColor: ctx => {
+                const value = ctx.dataset.data[ctx.dataIndex].v;
+                const intensity = (value - minVal) / (maxVal - minVal || 1);
+                // Градиент от светло-зелёного к насыщенному
+                const alpha = 0.4 + intensity * 0.6;
+                return `rgba(76, 175, 80, ${alpha})`;
+              },
+              borderColor: 'rgba(255, 255, 255, 0.5)',
+              borderWidth: 1,
+              // 👇 Безопасное вычисление ширины с фолбэком
+              width: ({chart}) => {
+                const area = chart.chartArea;
+                if (!area || !area.width) return 32;
+                return Math.max(24, (area.width / 24) - 3);
+              },
+              height: 30,
+              borderRadius: 3,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 300 },
+            plugins: {
+              tooltip: {
+                backgroundColor: 'rgba(33, 33, 33, 0.9)',
+                titleColor: '#fff',
+                bodyColor: '#fff',
+                borderColor: '#4caf50',
+                borderWidth: 1,
+                padding: 12,
+                displayColors: true,
+                callbacks: {
+                  title: ctx => {
+                    const raw = ctx[0]?.raw;
+                    return `📅 День: ${raw?.y} | 🕐 ${String(raw?.x).padStart(2, '0')}:00–${String(raw?.x).padStart(2, '0')}:59`;
+                  },
+                  label: ctx => `👥 Онлайн: ${ctx.raw?.v?.toLocaleString('ru-RU')}`,
+                  footer: () => '💡 Цвет = интенсивность активности'
+                }
+              },
+              legend: { 
+                display: false 
+              },
+              title: {
+                display: true,
+                text: `📈 Активность: от ${minVal.toLocaleString('ru-RU')} до ${maxVal.toLocaleString('ru-RU')} пользователей`,
+                font: { size: 13 },
+                padding: { top: 0, bottom: 15 }
+              }
+            },
+            scales: {
+              x: {
+                title: { 
+                  display: true, 
+                  text: 'Часы суток (UTC)',
+                  font: { weight: 'bold' }
+                },
+                min: 0, 
+                max: 23, 
+                ticks: { 
+                  stepSize: 3,
+                  callback: val => `${val}:00`
+                },
+                grid: { color: 'rgba(0,0,0,0.05)' }
+              },
+              y: {
+                title: { 
+                  display: true, 
+                  text: 'День месяца',
+                  font: { weight: 'bold' }
+                },
+                reverse: true,
+                ticks: { stepSize: 1 },
+                grid: { color: 'rgba(0,0,0,0.05)' }
+              }
+            }
+          }
+        });
+
+        // Обновляем статус
+        const latestTime = rawData[rawData.length - 1]?.time;
+        document.getElementById('lastUpdate').textContent = 
+          `✅ Обновлено: ${formatLastUpdate(latestTime)} | 🔹 Сейчас: ~${currentUsers.toLocaleString('ru-RU')} онлайн`;
+        
+        console.log('✅ Heatmap rendered:', heatData.length, 'cells');
+        
+      } catch (err) {
+        console.error('❌ Heatmap error:', err);
+        showError(err.message || 'Неизвестная ошибка загрузки данных');
+        document.getElementById('lastUpdate').textContent = '❌ Ошибка загрузки';
+      }
+    }
+
+    // ===== Инициализация =====
+    document.addEventListener('DOMContentLoaded', () => {
+      loadHeatmap();
+      // Автообновление каждые 5 минут
+      setInterval(loadHeatmap, 300000);
+    });
   </script>
 </body>
 </html>

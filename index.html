@@ -5,54 +5,53 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Nekto Online Heatmap</title>
   
-  <!-- Совместимые версии библиотек -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1"></script>
   <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@1.0.0"></script>
   
   <style>
+    :root {
+      --bg: #0b1120;
+      --card: #151e32;
+      --text: #e2e8f0;
+      --text-muted: #94a3b8;
+      --grid: rgba(255,255,255,0.08);
+      --accent: #3b82f6;
+    }
     * { box-sizing: border-box; }
     body { 
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif; 
-      margin: 0; 
-      padding: 20px; 
-      text-align: center; 
-      background: #f5f5f5;
-      color: #333;
+      margin: 0; padding: 20px; background: var(--bg); color: var(--text);
     }
     .container {
-      max-width: 1100px;
-      margin: 0 auto;
-      background: #fff;
-      border-radius: 12px;
-      padding: 20px;
-      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      max-width: 1100px; margin: 0 auto; background: var(--card);
+      border-radius: 12px; padding: 24px; box-shadow: 0 4px 20px rgba(0,0,0,0.4);
     }
-    h1 { margin: 0 0 8px; font-size: 1.5rem; color: #2e7d32; }
-    .subtitle { color: #666; font-size: 0.9rem; margin-bottom: 20px; }
-    .chart-wrapper { position: relative; width: 100%; height: 500px; margin: 20px 0; }
+    h1 { margin: 0 0 8px; font-size: 1.6rem; color: var(--accent); }
+    .subtitle { color: var(--text-muted); font-size: 0.95rem; margin-bottom: 20px; }
+    .chart-wrapper { position: relative; width: 100%; height: 520px; margin: 20px 0; }
     canvas { max-width: 100%; }
-    .donate { margin-top: 30px; font-size: 16px; }
+    .donate { margin-top: 30px; }
     .donate a {
-      color: #fff; background: #4caf50; padding: 10px 20px;
+      color: #fff; background: var(--accent); padding: 10px 20px;
       border-radius: 8px; text-decoration: none; font-weight: 500;
-      display: inline-block; transition: background 0.2s;
+      display: inline-block; transition: background 0.2s, transform 0.1s;
     }
-    .donate a:hover { background: #43a047; }
-    .status { font-size: 0.85rem; color: #888; margin-top: 10px; }
+    .donate a:hover { background: #2563eb; transform: translateY(-1px); }
+    .status { font-size: 0.85rem; color: var(--text-muted); margin-top: 10px; }
     .error {
-      color: #c62828; background: #ffebee; padding: 12px;
-      border-radius: 6px; margin: 10px 0; display: none; border: 1px solid #ef9a9a;
+      color: #fca5a5; background: rgba(220,38,38,0.15); padding: 12px;
+      border-radius: 6px; margin: 10px 0; display: none; border: 1px solid rgba(220,38,38,0.3);
     }
     @media (max-width: 600px) {
-      .chart-wrapper { height: 400px; }
-      h1 { font-size: 1.2rem; }
+      .chart-wrapper { height: 420px; }
+      h1 { font-size: 1.3rem; }
     }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>📊 Онлайн на nekto.me</h1>
-    <div class="subtitle">Тепловая карта активности по часам и дням (UTC)</div>
+    <div class="subtitle">Тепловая карта активности (МСК, UTC+3)</div>
     
     <div id="errorMsg" class="error"></div>
     
@@ -82,13 +81,14 @@
 
     function aggregateData(rawData) {
       const map = new Map();
+      const UTC3 = 3 * 60 * 60 * 1000; // Сдвиг на МСК
       for (const entry of rawData) {
         const date = parseTime(entry.time);
         if (!date) continue;
-        const day = date.getUTCDate();
-        const hour = date.getUTCHours();
+        const localTime = date.getTime() + UTC3;
+        const day = new Date(localTime).getUTCDate();
+        const hour = new Date(localTime).getUTCHours();
         const key = `${day}-${hour}`;
-        
         if (!map.has(key)) map.set(key, { day, hour, values: [] });
         map.get(key).values.push(entry.users);
       }
@@ -107,11 +107,9 @@
       el.textContent = '⚠️ ' + msg;
       el.style.display = 'block';
     }
-
     function hideError() {
       document.getElementById('errorMsg').style.display = 'none';
     }
-
     function formatTime(timestamp) {
       return new Date(timestamp).toLocaleString('ru-RU', { 
         day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' 
@@ -140,25 +138,25 @@
 
         heatmapChart = new Chart(ctx, {
           type: 'matrix',
-          data: {
+           {
             datasets: [{
               label: 'Пользователи онлайн',
-              data: heatData,
+               heatData,
               backgroundColor: ctx => {
                 const val = ctx.dataset.data[ctx.dataIndex].v;
-                const intensity = (val - minVal) / (maxVal - minVal || 1);
-                return `rgba(76, 175, 80, ${0.4 + intensity * 0.6})`;
+                const t = (val - minVal) / (maxVal - minVal || 1);
+                // 0 (красный) → 120 (зелёный) в HSL
+                return `hsl(${t * 120}, 85%, 60%)`;
               },
-              borderColor: 'rgba(255,255,255,0.5)',
+              borderColor: 'rgba(15, 23, 42, 0.6)',
               borderWidth: 1,
-              // Безопасный расчёт ширины
               width: function(context) {
                 const area = context.chart.chartArea;
                 if (!area || !area.width) return 32;
                 return Math.max(24, (area.width / 24) - 3);
               },
-              height: 30,
-              borderRadius: 3
+              height: 32,
+              borderRadius: 4
             }]
           },
           options: {
@@ -167,13 +165,14 @@
             animation: { duration: 300 },
             plugins: {
               tooltip: {
-                backgroundColor: 'rgba(33,33,33,0.9)',
-                titleColor: '#fff', bodyColor: '#fff',
-                borderColor: '#4caf50', borderWidth: 1,
+                backgroundColor: '#1e293b',
+                titleColor: '#fff', bodyColor: '#cbd5e1',
+                borderColor: '#334155', borderWidth: 1,
+                padding: 10,
                 callbacks: {
                   title: ctx => {
                     const r = ctx[0].raw;
-                    return `📅 День: ${r.y} | 🕐 ${String(r.x).padStart(2,'0')}:00`;
+                    return `📅 ${r.y} ${['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][new Date(Date.UTC(2026,3,r.y)).getUTCDay()]} | 🕐 ${String(r.x).padStart(2,'0')}:00 МСК`;
                   },
                   label: ctx => `👥 Онлайн: ${ctx.raw.v.toLocaleString('ru-RU')}`
                 }
@@ -182,20 +181,29 @@
               title: {
                 display: true,
                 text: `📈 Диапазон: ${minVal.toLocaleString('ru-RU')} – ${maxVal.toLocaleString('ru-RU')}`,
-                font: { size: 13 },
-                padding: { bottom: 10 }
+                color: '#cbd5e1', font: { size: 13, weight: '500' },
+                padding: { bottom: 12 }
               }
             },
             scales: {
               x: {
-                title: { display: true, text: 'Часы (UTC)' },
-                min: 0, max: 23,
-                ticks: { stepSize: 3, callback: v => `${v}:00` }
+                title: { display: true, text: 'Часы (МСК)', color: '#94a3b8' },
+                type: 'linear', min: 0, max: 23,
+                ticks: { stepSize: 3, color: '#cbd5e1', callback: v => `${v}:00` },
+                grid: { color: 'rgba(255,255,255,0.06)' }
               },
               y: {
-                title: { display: true, text: 'День месяца' },
-                reverse: true,
-                ticks: { stepSize: 1 }
+                title: { display: true, text: 'День месяца (МСК)', color: '#94a3b8' },
+                type: 'linear', reverse: true,
+                ticks: { 
+                  stepSize: 1, color: '#cbd5e1',
+                  callback: function(value) {
+                    const days = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+                    const d = new Date(Date.UTC(2026, 3, value));
+                    return `${value} ${days[d.getUTCDay()]}`;
+                  }
+                },
+                grid: { color: 'rgba(255,255,255,0.06)' }
               }
             }
           }
@@ -207,7 +215,7 @@
           
       } catch (err) {
         console.error('Heatmap error:', err);
-        showError(err.message || 'Ошибка загрузки');
+        showError(err.message || 'Ошибка загрузки данных');
         document.getElementById('lastUpdate').textContent = '❌ Ошибка';
       }
     }

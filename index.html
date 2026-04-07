@@ -136,16 +136,16 @@
         const ctx = document.getElementById('heatmap').getContext('2d');
         if (heatmapChart) heatmapChart.destroy();
 
+        // 👇 ИСПРАВЛЕНО: добавлен ключ `data:` перед объектом datasets
         heatmapChart = new Chart(ctx, {
           type: 'matrix',
-           {
+          data: {
             datasets: [{
               label: 'Пользователи онлайн',
-               heatData,
+              data: heatData,
               backgroundColor: ctx => {
                 const val = ctx.dataset.data[ctx.dataIndex].v;
                 const t = (val - minVal) / (maxVal - minVal || 1);
-                // 0 (красный) → 120 (зелёный) в HSL
                 return `hsl(${t * 120}, 85%, 60%)`;
               },
               borderColor: 'rgba(15, 23, 42, 0.6)',
@@ -172,7 +172,9 @@
                 callbacks: {
                   title: ctx => {
                     const r = ctx[0].raw;
-                    return `📅 ${r.y} ${['Вс','Пн','Вт','Ср','Чт','Пт','Сб'][new Date(Date.UTC(2026,3,r.y)).getUTCDay()]} | 🕐 ${String(r.x).padStart(2,'0')}:00 МСК`;
+                    const days = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+                    const d = new Date(Date.UTC(2026, 3, r.y));
+                    return `📅 ${r.y} ${days[d.getUTCDay()]} | 🕐 ${String(r.x).padStart(2,'0')}:00 МСК`;
                   },
                   label: ctx => `👥 Онлайн: ${ctx.raw.v.toLocaleString('ru-RU')}`
                 }
